@@ -12,10 +12,22 @@ struct Options {
   string compress_xclbin;
   unsigned long block_size;
   unsigned num_memory;
+  string inputname;
   string filename;
   uint32_t memory_size;
+  bool enable_p2p;
 } g_options{};
 
+size_t getFileSize(const std::string& fileName) {
+    ifstream file(fileName, ios::binary | ios::ate);
+    if (file) {
+        file.seekg(0, ios::end);
+        streamsize size = file.tellg();
+        return size;
+    } else {
+        return 0;
+    }
+}
 int main(int argc, char *argv[]) {
   namespace po = boost::program_options;
 
@@ -27,10 +39,12 @@ int main(int argc, char *argv[]) {
       "Kernel compression bin xclbin file")(
       "num_memory", po::value<unsigned>()->default_value(1),
       "Number of memory to compress")(
+      "inputname", po::value<string>()->required(), "Output file name in ssd")(
       "filename", po::value<string>()->required(), "Output file name in ssd")(
       "memory_size", po::value<uint32_t>()->required(),
       "Memory size to compress (MB)")(
       "block_size", po::value<unsigned long>()->default_value(BLOCK_SIZE_IN_KB),
+      "enable_p2p", po::value<bool>()->default_value(BLOCK_SIZE_IN_KB),
       "Compress block size (KB)");
 
   po::variables_map vm;
@@ -46,21 +60,21 @@ int main(int argc, char *argv[]) {
   g_options.block_size = vm["block_size"].as<unsigned long>();
   g_options.compress_xclbin = vm["compress_xclbin"].as<string>();
   g_options.num_memory = vm["num_memory"].as<unsigned>();
+  g_options.inputname = vm["inputname"].as<string>();
   g_options.filename = vm["filename"].as<string>();
   g_options.memory_size = vm["memory_size"].as<uint32_t>() * (1 << 20);
 
-  vector<char *> inVec;
+  vector<string> inVec;
   vector<string> outVec;
   vector<uint32_t> inSizeVec;
 
   for (unsigned i = 0; i < g_options.num_memory; i++) {
     outVec.push_back(g_options.filename + "." + to_string(i));
+    inVec.push_back(g_options.inputname);
 
-    char *memory =
-        static_cast<char *>(aligned_alloc(4096, g_options.memory_size));
-    memset(memory, rand() % 256, g_options.memory_size);
-    inVec.push_back(memory);
-    inSizeVec.push_back(g_options.memory_size);
+    size_t fileSize = getFileSize(g_options.inputname);
+    std::cout << "[DEBUG] input file size : " << fileSize << std::endl;
+    inSizeVec.push_back(fileSize);
   }
 
   std::cout << "\x1B[32m[OpenCL Setup]\033[0m OpenCL/Host/Device Buffer Setup "
