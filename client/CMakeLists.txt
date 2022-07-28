@@ -6,7 +6,7 @@ find_package(OpenCL REQUIRED)
 
 set(CMAKE_CXX_STANDARD 14)
 set(XILINX_XRT /opt/xilinx/xrt)
-set(XILINX_VITIS ${HOME}/xilinx/Vitis/2019.2)
+set(XILINX_VITIS /mnt/nvme1/tools/Xilinx/Vitis/2021.2)
 
 include_directories(${CMAKE_INSTALL_PREFIX}/include)
 include_directories(${OpenCL_INCLUDE_DIRS})

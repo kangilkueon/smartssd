@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 3.0)
 
 project(compression-kernel)
 
-set(CMAKE_C_COMPILER "$ENV{HOME}/xilinx/Vitis/2019.2/bin/v++")
-set(CMAKE_CXX_COMPILER "$ENV{HOME}/xilinx/Vitis/2019.2/bin/v++")
+set(CMAKE_C_COMPILER "/mnt/nvme1/tools/Xilinx/Vitis/2021.2/bin/v++")
+set(CMAKE_CXX_COMPILER "/mnt/nvme1/tools/Xilinx/Vitis/2021.2/bin/v++")
 
 
-set(XILINX_XRT /opt/xilinx/xrt)
-set(XILINX_VITIS $ENV{HOME}/xilinx/Vitis/2019.2)
+set(XILINX_XRT $ENV{XILINX_XRT})
+set(XILINX_VITIS /mnt/nvme1/tools/Xilinx/Vitis/2021.2/)
 set(TARGET hw)
-set(PLATFORM ${XILINX_VITIS}/platforms/xilinx_samsung_u2x4_201920_2/xilinx_samsung_u2x4_201920_2.xpfm)
+set(PLATFORM /opt/xilinx/platforms/xilinx_u2_gen3x4_xdma_gc_2_202110_1/xilinx_u2_gen3x4_xdma_gc_2_202110_1.xpfm)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
