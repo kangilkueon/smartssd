@@ -34,18 +34,14 @@ int main(int argc, char *argv[]) {
   po::options_description desc("Options");
   po::positional_options_description g_pos; /* no positional options */
 
-  desc.add_options()("help,h", "Show help")(
-      "compress_xclbin", po::value<std::string>()->required(),
-      "Kernel compression bin xclbin file")(
-      "num_memory", po::value<unsigned>()->default_value(1),
-      "Number of memory to compress")(
-      "inputname", po::value<string>()->required(), "Output file name in ssd")(
-      "filename", po::value<string>()->required(), "Output file name in ssd")(
-      "memory_size", po::value<uint32_t>()->required(),
-      "Memory size to compress (MB)")(
-      "block_size", po::value<unsigned long>()->default_value(BLOCK_SIZE_IN_KB),
-      "enable_p2p", po::value<bool>()->default_value(BLOCK_SIZE_IN_KB),
-      "Compress block size (KB)");
+  desc.add_options()("help,h", "Show help")
+      ("compress_xclbin", po::value<std::string>()->required(), "Kernel compression bin xclbin file")
+      ("num_memory", po::value<unsigned>()->default_value(1), "Number of memory to compress")
+      ("inputname", po::value<string>()->required(), "Output file name in ssd")
+      ("filename", po::value<string>()->required(), "Output file name in ssd")
+      ("memory_size", po::value<uint32_t>()->required(), "Memory size to compress (MB)")
+      ("block_size", po::value<unsigned long>()->default_value(BLOCK_SIZE_IN_KB), "Compress block size (KB)")
+      ("enable_p2p", po::value<bool>()->default_value(false), "Compress block size (KB)");
 
   po::variables_map vm;
   po::store(
