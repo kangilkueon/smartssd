@@ -150,7 +150,7 @@ xflz4::~xflz4() {
 // This version of compression does overlapped execution between
 // Kernel and Host. I/O operations between Host and Device are
 // overlapped with Kernel execution between multiple compute units
-void xflz4::compress_in_line_multiple_files(std::vector<std::string>& inVec,
+void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
                                             const std::vector<std::string>& outFileVec,
                                             std::vector<uint32_t>& inSizeVec,
                                             bool enable_p2p) {
@@ -239,6 +239,7 @@ void xflz4::compress_in_line_multiple_files(std::vector<std::string>& inVec,
             pack_kname += ":{xilLz4Packer_2}";
         }
 
+#if 0
         // read file from ssd
         int datasize = inSizeVec[i];
         // file open
@@ -259,13 +260,11 @@ void xflz4::compress_in_line_multiple_files(std::vector<std::string>& inVec,
         }
 
         inSizeVec[i] = read_result;
-#if 0
         int outputFD = open("/mnt/smartssd/write_test.txt", O_CREAT | O_WRONLY, 0777);
         if (outputFD < 0) std::cout << "outputFD file error!" << std::endl;
         int w_result = write(outputFD, (void*) memory, read_result);
         std::cout << "w_result result : " << w_result << std::endl;
         close(outputFD);
-#endif
         close(inputFD);
 
         std::cout << "1!" << std::endl;
@@ -279,12 +278,13 @@ void xflz4::compress_in_line_multiple_files(std::vector<std::string>& inVec,
         
         bufInputVec.push_back(buffer_input_file);
 
+#endif
         // Device buffer allocation
         // K1 Input:- This buffer contains input chunk data
-        // cl::Buffer* buffer_input =
-        //    new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, inSizeVec[i], inVec[i]);
-        // bufInputVec.push_back(buffer_input);
-        // K2 Output:- This buffer contains compressed data written by device
+        cl::Buffer* buffer_input =
+            new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, inSizeVec[i], inVec[i]);
+        bufInputVec.push_back(buffer_input);
+        //K2 Output:- This buffer contains compressed data written by device
         cl::Buffer* buffer_lz4out = new cl::Buffer(*m_context, CL_MEM_WRITE_ONLY | CL_MEM_EXT_PTR_XILINX, outputSize, &(lz4Ext));
         buflz4OutVec.push_back(buffer_lz4out);
         uint8_t* h_buf_out_p2p = (uint8_t*)m_q->enqueueMapBuffer(*(buffer_lz4out), CL_TRUE, CL_MAP_READ, 0, outputSize);
@@ -469,14 +469,17 @@ void xflz4::compress_in_line_multiple_files(std::vector<std::string>& inVec,
         std::cout << "8!" << std::endl;
         total_file_size += inSizeVec[i];
     }
+        std::cout << "9!" << std::endl;
     auto total_end = std::chrono::high_resolution_clock::now();
 
+        std::cout << "10!" << std::endl;
     auto time_ns = std::chrono::duration<double, std::nano>(total_end - total_start);
     float throughput_in_mbps_1 = (float)total_file_size * 1000 / time_ns.count();
 
     std::cout << "\nOverall Throughput [Including SSD Operation]: " << std::fixed << std::setprecision(2)
               << throughput_in_mbps_1;
     std::cout << " MB/s";
+        std::cout << "11!" << std::endl;
     
 #if 0
 #endif
