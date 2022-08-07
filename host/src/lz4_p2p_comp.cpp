@@ -242,13 +242,21 @@ void xflz4::compress_in_line_multiple_files(std::vector<std::string>& inVec,
         // read file from ssd
         int datasize = inSizeVec[i];
         // file open
-        int inputFD = open(inVec[i].c_str(), O_CREAT | O_RDONLY | O_DIRECT, 0777);
+        int inputFD = open(inVec[i].c_str(), O_CREAT | O_RDONLY, 0777); // | O_DIRECT
         std::cout << inVec[i].c_str() << std::endl;
-        if (inputFD < 0) std::cout << "Input file error!" << std::endl;
+        if (inputFD < 0) 
+        {
+            std::cout << "[Error] Input file error!" << std::endl;
+            printf("Error : %s\n", strerror(errno));
+        }
         // buffer
         char *memory = static_cast<char *>(aligned_alloc(4096, datasize));
         int read_result = read(inputFD, (void*) memory, datasize);
-        if (read_result < 0) std::cout << " file Read error!" << std::endl;
+        if (read_result < 0) 
+        {
+            std::cout << "[Error] file Read error!" << std::endl;
+            printf("Error : %s\n", strerror(errno));
+        }
 
         inSizeVec[i] = read_result;
 #if 0
