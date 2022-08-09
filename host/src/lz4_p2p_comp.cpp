@@ -281,14 +281,15 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
 #endif
         // Device buffer allocation
         // K1 Input:- This buffer contains input chunk data
-        cl::Buffer* buffer_input =
-            new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, inSizeVec[i], inVec[i]);
+        cl::Buffer* buffer_input =new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, inSizeVec[i], inVec[i]);
         bufInputVec.push_back(buffer_input);
+
         //K2 Output:- This buffer contains compressed data written by device
         cl::Buffer* buffer_lz4out = new cl::Buffer(*m_context, CL_MEM_WRITE_ONLY | CL_MEM_EXT_PTR_XILINX, outputSize, &(lz4Ext));
         buflz4OutVec.push_back(buffer_lz4out);
         uint8_t* h_buf_out_p2p = (uint8_t*)m_q->enqueueMapBuffer(*(buffer_lz4out), CL_TRUE, CL_MAP_READ, 0, outputSize);
         bufp2pOutVec.push_back(h_buf_out_p2p);
+        
         // K1 Output:- This buffer contains compressed data written by device
         // K2 Input:- This is a input to data packer kernel
         cl::Buffer* buffer_output = new cl::Buffer(*m_context, CL_MEM_WRITE_ONLY, inSizeVec[i]);
@@ -330,7 +331,8 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         }
 
         if (enable_p2p) {
-            int fd_p2p_c_out = open(outFileVec[i].c_str(), O_CREAT | O_WRONLY, 0777);
+            int fd_p2p_c_out = open(outFileVec[i].c_str(), O_CREAT | O_WRONLY | O_DIRECT, 0777);
+            //int fd_p2p_c_out = open(outFileVec[i].c_str(), O_CREAT | O_WRONLY, 0777);
             if (fd_p2p_c_out <= 0) {
                 std::cout << "P2P: Unable to open output file, exited!, ret: " << fd_p2p_c_out << std::endl;
                 close(fd_p2p_c_out);

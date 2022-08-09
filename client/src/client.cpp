@@ -2,6 +2,7 @@
 
 #include <boost/program_options.hpp>
 #include <lz4_p2p_comp.hpp>
+#include <lz4_p2p_dec.hpp>
 #include <vector>
 
 #define MEMORY_SIZE 2U << 31
@@ -9,12 +10,9 @@
 using namespace std;
 
 struct Options {
-  string compress_xclbin;
-  unsigned long block_size;
-  unsigned num_memory;
-  string inputname;
-  string filename;
-  uint32_t memory_size;
+  string xclbin;
+  bool compress;
+  string input_filename;
   bool enable_p2p;
 } g_options{};
 
@@ -108,6 +106,107 @@ void xil_compress_file(std::string& file, uint32_t block_size, std::string& comp
     std::cout << "\nCompression is successful. No errors found.\n";
     std::cout << std::endl;
 }
+void decompress_multiple_files(const std::vector<std::string>& inFileVec,
+                               const std::vector<std::string>& outFileVec,
+                               const std::string& decompress_bin,
+                               bool enable_p2p,
+                               uint8_t maxCR) {
+    std::vector<char*> outVec;
+    std::vector<uint64_t> orgSizeVec;
+    std::vector<uint64_t> inSizeVec;
+    std::vector<int> fd_p2p_vec;
+    std::vector<cl_event> userEventVec;
+    uint64_t total_in_size = 0;
+
+    std::cout << "\n";
+    std::cout << "\x1B[31m[Disk Operation]\033[0m Reading Input Files Started ..." << std::endl;
+    for (uint32_t fid = 0; fid < inFileVec.size(); fid++) {
+        std::string inFile_name = inFileVec[fid];
+        std::ifstream inFile(inFile_name.c_str(), std::ifstream::binary);
+        uint32_t input_size = xfLz4::get_file_size(inFile);
+        inFile.close();
+
+        int fd_p2p_c_in = open(inFile_name.c_str(), O_RDONLY | O_DIRECT);
+        if (fd_p2p_c_in <= 0) {
+            std::cout << "P2P: Unable to open input file, fd: " << fd_p2p_c_in << std::endl;
+            exit(1);
+        }
+        std::vector<uint8_t, aligned_allocator<uint8_t> > in_4kbytes(4 * KB);
+        read(fd_p2p_c_in, (char*)in_4kbytes.data(), 4 * KB);
+        lseek(fd_p2p_c_in, 0, SEEK_SET);
+        fd_p2p_vec.push_back(fd_p2p_c_in);
+        total_in_size += input_size;
+        char* out = (char*)aligned_alloc(4096, maxCR * input_size);
+        uint64_t orgSize;
+        outVec.push_back(out);
+        orgSizeVec.push_back(orgSize);
+        inSizeVec.push_back(input_size);
+    }
+    std::cout << "\x1B[31m[Disk Operation]\033[0m Reading Input Files Done ..." << std::endl;
+    std::cout << "\n\n";
+    std::cout << "\x1B[32m[OpenCL Setup]\033[0m OpenCL/Host/Device Buffer Setup Started ..." << std::endl;
+    xfLz4 xlz(decompress_bin);
+    std::cout << "\x1B[32m[OpenCL Setup]\033[0m OpenCL/Host/Device Buffer Setup Done ..." << std::endl;
+    std::cout << "\n";
+    std::cout << "\x1B[36m[FPGA LZ4]\033[0m LZ4 P2P DeCompression Started ..." << std::endl;
+    std::cout << "\n";
+    xlz.decompress_in_line_multiple_files(inFileVec, fd_p2p_vec, outVec, orgSizeVec, inSizeVec, enable_p2p);
+    std::cout << "\n";
+    std::cout << "\x1B[36m[FPGA LZ4]\033[0m LZ4 P2P DeCompression Done ..." << std::endl;
+    std::cout << "\n";
+    std::cout << "\x1B[31m[Disk Operation]\033[0m Writing Output Files Started ..." << std::endl;
+    for (uint32_t fid = 0; fid < inFileVec.size(); fid++) {
+        std::string outFile_name = outFileVec[fid];
+        std::ofstream outFile(outFile_name.c_str(), std::ofstream::binary);
+        outFile.write((char*)outVec[fid], orgSizeVec[fid]);
+        close(fd_p2p_vec[fid]);
+        outFile.close();
+    }
+    std::cout << "\x1B[31m[Disk Operation]\033[0m Writing Output Files Done ..." << std::endl;
+}
+
+void xil_decompress_file_list(std::string& file_list, std::string& decompress_bin, bool enable_p2p, uint8_t maxCR) {
+    std::ifstream infilelist_dec(file_list.c_str());
+    std::string line_dec;
+    std::vector<std::string> inFileList;
+    std::vector<std::string> outFileList;
+    std::vector<std::string> orgFileList;
+    while (std::getline(infilelist_dec, line_dec)) {
+        std::string in_file = line_dec;
+        std::string out_file = line_dec + ".org";
+        inFileList.push_back(in_file);
+        std::string delimiter = ".lz4";
+        std::string token = line_dec.substr(0, line_dec.find(delimiter));
+        orgFileList.push_back(token);
+        outFileList.push_back(out_file);
+    }
+    decompress_multiple_files(inFileList, outFileList, decompress_bin, enable_p2p, maxCR);
+    std::cout << std::endl;
+    for (size_t i = 0; i < inFileList.size(); i++) {
+        auto ret = validateFile(orgFileList[i], outFileList[i]) ? "FAILED: " : "PASSED: ";
+        std::cout << ret << inFileList[i] << std::endl;
+    }
+}
+
+void xil_decompress_file(std::string& file, std::string& decompress_bin, bool enable_p2p, uint8_t maxCR) {
+    std::string line_dec = file.c_str();
+    std::vector<std::string> inFileList;
+    std::vector<std::string> outFileList;
+    std::vector<std::string> orgFileList;
+    std::string in_file = line_dec;
+    std::string out_file = line_dec + ".org";
+    inFileList.push_back(in_file);
+    std::string delimiter = ".lz4";
+    std::string token = line_dec.substr(0, line_dec.find(delimiter));
+    orgFileList.push_back(token);
+    outFileList.push_back(out_file);
+    decompress_multiple_files(inFileList, outFileList, decompress_bin, enable_p2p, maxCR);
+    std::cout << std::endl;
+    for (size_t i = 0; i < inFileList.size(); i++) {
+        auto ret = validateFile(orgFileList[i], outFileList[i]) ? "FAILED: " : "PASSED: ";
+        std::cout << ret << inFileList[i] << std::endl;
+    }
+}
 
 size_t getFileSize(const std::string& fileName) {
     ifstream file(fileName, ios::binary | ios::ate);
@@ -120,70 +219,40 @@ size_t getFileSize(const std::string& fileName) {
     }
 }
 int main(int argc, char *argv[]) {
-  namespace po = boost::program_options;
+    namespace po = boost::program_options;
 
-  po::options_description desc("Options");
-  po::positional_options_description g_pos; /* no positional options */
+    po::options_description desc("Options");
+    po::positional_options_description g_pos; /* no positional options */
 
-  desc.add_options()("help,h", "Show help")
-      ("compress_xclbin", po::value<std::string>()->required(), "Kernel compression bin xclbin file")
-      ("num_memory", po::value<unsigned>()->default_value(1), "Number of memory to compress")
-      ("inputname", po::value<string>()->required(), "Output file name in ssd")
-      ("filename", po::value<string>()->required(), "Output file name in ssd")
-      ("memory_size", po::value<uint32_t>()->required(), "Memory size to compress (MB)")
-      ("block_size", po::value<unsigned long>()->default_value(BLOCK_SIZE_IN_KB), "Compress block size (KB)")
-      ("enable_p2p", po::value<bool>()->default_value(false), "Compress block size (KB)");
+    desc.add_options()("help,h", "Show help")
+        ("xclbin", po::value<std::string>()->required(), "Kernel compression bin xclbin file")
+        ("compress", po::value<bool>()->default_value(true), "Number of memory to compress")
+        ("input_filename", po::value<string>()->required(), "Input file name in ssd")
+        ("enable_p2p", po::value<bool>()->default_value(false), "Compress block size (KB)");
 
-  po::variables_map vm;
-  po::store(
-      po::command_line_parser(argc, argv).options(desc).positional(g_pos).run(),
-      vm);
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(g_pos).run(), vm);
 
-  if (vm.count("help") > 0) {
-    std::cout << desc;
-    return -1;
-  }
-
-  g_options.block_size = vm["block_size"].as<unsigned long>();
-  g_options.compress_xclbin = vm["compress_xclbin"].as<string>();
-  g_options.num_memory = vm["num_memory"].as<unsigned>();
-  g_options.inputname = vm["inputname"].as<string>();
-  g_options.filename = vm["filename"].as<string>();
-  g_options.memory_size = vm["memory_size"].as<uint32_t>() * (1 << 20);
-
-  vector<string> inVec;
-  vector<string> outVec;
-  vector<uint32_t> inSizeVec;
-
-  for (unsigned i = 0; i < g_options.num_memory; i++) {
-    outVec.push_back(g_options.filename + "." + to_string(i));
-    inVec.push_back(g_options.inputname);
-
-    size_t fileSize = getFileSize(g_options.inputname);
-    std::cout << "[DEBUG] input file size : " << fileSize << std::endl;
-    inSizeVec.push_back(fileSize);
-  }
-
-  xil_compress_file(g_options.inputname, g_options.block_size, g_options.compress_xclbin, g_options.enable_p2p);
-#if 0
-    // "-l" List of Files
-    if (!filelist.empty()) {
-        std::cout << "\n" << std::endl;
-        xil_compress_file_list(filelist, g_options.block_size, g_options.compress_xclbin, enable_p2p);
+    if (vm.count("help") > 0)
+    {
+        std::cout << desc;
+        return -1;
     }
-  std::cout << "\x1B[32m[OpenCL Setup]\033[0m OpenCL/Host/Device Buffer Setup "
-               "Started ..."
-            << std::endl;
-  xflz4 xlz(g_options.compress_xclbin, 0, g_options.block_size);
-  std::cout << "\x1B[32m[OpenCL Setup]\033[0m OpenCL/Host/Device Buffer Setup "
-               "Done ..."
-            << std::endl;
-  std::cout << "\n";
-  std::cout << "\x1B[36m[FPGA LZ4]\033[0m LZ4 P2P Compression Started ..."
-            << std::endl;
-  xlz.compress_in_line_multiple_files(inVec, outVec, inSizeVec, true);
-  std::cout << "\n\n";
-  std::cout << "\x1B[36m[FPGA LZ4]\033[0m LZ4 P2P Compression Done ..."
-            << std::endl;
-#endif
+
+    g_options.xclbin = vm["xclbin"].as<string>();
+    g_options.compress = vm["compress"].as<bool>();
+    g_options.input_filename = vm["input_filename"].as<string>();
+    g_options.enable_p2p = vm["enable_p2p"].as<bool>();
+
+    size_t fileSize = getFileSize(g_options.input_filename);
+    std::cout << "[DEBUG] input file size : " << fileSize << std::endl;
+
+    if (g_options.compress == true)
+    {
+        xil_compress_file(g_options.input_filename, BLOCK_SIZE_IN_KB, g_options.xclbin, g_options.enable_p2p);
+    }
+    else
+    {
+        xil_decompress_file(g_options.input_filename, g_options.xclbin, g_options.enable_p2p, fileSize * 8);
+    }
 }
