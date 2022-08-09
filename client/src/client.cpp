@@ -137,7 +137,7 @@ void decompress_multiple_files(const std::vector<std::string>& inFileVec,
         fd_p2p_vec.push_back(fd_p2p_c_in);
         total_in_size += input_size;
         char* out = (char*)aligned_alloc(4096, maxCR * input_size);
-        uint64_t orgSize;
+        uint64_t orgSize = maxCR * input_size;
         outVec.push_back(out);
         orgSizeVec.push_back(orgSize);
         inSizeVec.push_back(input_size);
@@ -253,6 +253,6 @@ int main(int argc, char *argv[]) {
     }
     else
     {
-        xil_decompress_file(g_options.input_filename, g_options.xclbin, g_options.enable_p2p, fileSize * 8);
+        xil_decompress_file(g_options.input_filename, g_options.xclbin, g_options.enable_p2p, 8);
     }
 }

@@ -231,7 +231,6 @@ void xfLz4::decompress_in_line_multiple_files(const std::vector<std::string>& in
     }
     error = clFinish(ooo_q);
 
-        std::cout << "2!" << std::endl;
     auto total_start = std::chrono::high_resolution_clock::now();
     for (uint32_t fid = 0; fid < inFileVec.size(); fid++) {
         if (!enable_p2p) clEnqueueMigrateMemObjects(ooo_q, 1, &buffer_input, 0, 0, nullptr, nullptr);
