@@ -5,8 +5,8 @@ project(compression-host)
 find_package(OpenCL REQUIRED)
 
 set(CMAKE_CXX_STANDARD 14)
-set(XILINX_XRT /opt/xilinx/xrt)
-set(XILINX_VITIS /mnt/nvme1/tools/Xilinx/Vitis/2021.2)
+set(XILINX_XRT "$ENV{XILINX_XRT}")
+set(XILINX_VITIS "$ENV{XILINX_VITIS}")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${OpenCL_INCLUDE_DIRS})
