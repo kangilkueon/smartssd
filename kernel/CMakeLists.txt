@@ -7,9 +7,9 @@ set(CMAKE_CXX_COMPILER "$ENV{XILINX_VITIS}/bin/v++")
 
 
 set(XILINX_XRT $ENV{XILINX_XRT})
-set(XILINX_VITIS /mnt/nvme1/tools/Xilinx/Vitis/2021.2/)
+set(XILINX_VITIS "$ENV{XILINX_VITIS}")
 set(TARGET hw)
-set(PLATFORM /opt/xilinx/platforms/xilinx_u2_gen3x4_xdma_gc_2_202110_1/xilinx_u2_gen3x4_xdma_gc_2_202110_1.xpfm)
+set(PLATFORM $XILINX_XRT/../platforms/xilinx_u2_gen3x4_xdma_gc_2_202110_1/xilinx_u2_gen3x4_xdma_gc_2_202110_1.xpfm)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -31,12 +31,6 @@ WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 add_custom_target(xf_unpacker ALL
 COMMAND ${CMAKE_CXX_COMPILER} -t ${TARGET} --platform ${PLATFORM} -k xilLz4Unpacker -I${CMAKE_CURRENT_SOURCE_DIR}/include/ -o xf_unpacker.xo -c ${CMAKE_CURRENT_SOURCE_DIR}/src/lz4_unpacker_kernel.cpp
 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-add_custom_target(compress ALL 
-COMMAND ${CMAKE_CXX_COMPILER} -t ${TARGET} --platform ${PLATFORM} --config ${CMAKE_CURRENT_SOURCE_DIR}/compression.ini -o compression.xclbin -I${CMAKE_CURRENT_SOURCE_DIR}/include/ -l xf_compress.xo xf_packer.xo xf_uncompress.xo xf_unpacker.xo
-WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-DEPENDS xf_compress xf_packer xf_uncompress xf_unpacker
 )
 
 add_custom_target(compress ALL 
