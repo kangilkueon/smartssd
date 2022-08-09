@@ -9,7 +9,7 @@ set(CMAKE_CXX_COMPILER "$ENV{XILINX_VITIS}/bin/v++")
 set(XILINX_XRT $ENV{XILINX_XRT})
 set(XILINX_VITIS "$ENV{XILINX_VITIS}")
 set(TARGET hw)
-set(PLATFORM $XILINX_XRT/../platforms/xilinx_u2_gen3x4_xdma_gc_2_202110_1/xilinx_u2_gen3x4_xdma_gc_2_202110_1.xpfm)
+set(PLATFORM ${XILINX_XRT}/../platforms/xilinx_u2_gen3x4_xdma_gc_2_202110_1/xilinx_u2_gen3x4_xdma_gc_2_202110_1.xpfm)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
