@@ -14,6 +14,7 @@ struct Options {
   bool compress;
   string input_filename;
   bool enable_p2p;
+  bool multiple;
 } g_options{};
 
 
@@ -237,7 +238,8 @@ int main(int argc, char *argv[]) {
         ("xclbin", po::value<std::string>()->required(), "Kernel compression bin xclbin file")
         ("compress", po::value<bool>()->default_value(true), "Number of memory to compress")
         ("input_filename", po::value<string>()->required(), "Input file name in ssd")
-        ("enable_p2p", po::value<bool>()->default_value(false), "Compress block size (KB)");
+        ("enable_p2p", po::value<bool>()->default_value(false), "Compress block size (KB)")
+        ("multiple", po::value<bool>()->default_value(false), "multiple");
 
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).positional(g_pos).run(), vm);
@@ -252,6 +254,7 @@ int main(int argc, char *argv[]) {
     g_options.compress = vm["compress"].as<bool>();
     g_options.input_filename = vm["input_filename"].as<string>();
     g_options.enable_p2p = vm["enable_p2p"].as<bool>();
+    g_options.multiple = vm["multiple"].as<bool>();
 
     size_t fileSize = getFileSize(g_options.input_filename);
     std::cout << "[DEBUG] input file : " << g_options.input_filename << std::endl;
@@ -259,7 +262,14 @@ int main(int argc, char *argv[]) {
 
     if (g_options.compress == true)
     {
-        xil_compress_file(g_options.input_filename, BLOCK_SIZE_IN_KB, g_options.xclbin, g_options.enable_p2p);
+        if (g_options.multiple == true)
+        {
+            xil_compress_file_list(g_options.input_filename, BLOCK_SIZE_IN_KB, g_options.xclbin, g_options.enable_p2p);
+        }
+        else
+        {
+            xil_compress_file(g_options.input_filename, BLOCK_SIZE_IN_KB, g_options.xclbin, g_options.enable_p2p);
+        }
     }
     else
     {

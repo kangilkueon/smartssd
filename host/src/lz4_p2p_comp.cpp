@@ -207,12 +207,6 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         std::string comp_kname = compress_kernel_names[0];
         std::string pack_kname = packer_kernel_names[0];
 
-        if (!enable_p2p) {
-            // Creating Host memory to read the compressed data back to host for non-p2p flow case
-            uint8_t* compressData = new uint8_t[outputSize];
-            compressDataInHostVec.push_back(compressData);
-        }
-
         // Total chunks in input file
         // For example: Input file size is 12MB and Host buffer size is 2MB
         // Then we have 12/2 = 6 chunks exists
@@ -221,16 +215,8 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         // operations
 
         uint32_t num_blocks = (inSizeVec[i] - 1) / block_size_in_bytes + 1;
-        // DDR buffer extensions
-        cl_mem_ext_ptr_t lz4Ext;
-        if (enable_p2p)
-            lz4Ext.flags = XCL_MEM_DDR_BANK0 | XCL_MEM_EXT_P2P_BUFFER;
-        else
-            lz4Ext.flags = XCL_MEM_DDR_BANK0;
-        lz4Ext.param = NULL;
-        lz4Ext.obj = nullptr;
 
-        int cu_num = i % 2;
+        int cu_num = 0; //i % 2;
 
         if (cu_num == 0) {
             comp_kname += ":{xilLz4Compress_1}";
@@ -239,7 +225,6 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
             comp_kname += ":{xilLz4Compress_2}";
             pack_kname += ":{xilLz4Packer_2}";
         }
-
         // Device buffer allocation
         // K1 Input:- This buffer contains input chunk data
         cl::Buffer* buffer_input =new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, inSizeVec[i], inVec[i]);
@@ -248,6 +233,11 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         //K2 Output:- This buffer contains compressed data written by device
         if (enable_p2p) 
         {
+            // DDR buffer extensions
+            cl_mem_ext_ptr_t lz4Ext;
+            lz4Ext.flags = XCL_MEM_DDR_BANK0 | XCL_MEM_EXT_P2P_BUFFER;
+            lz4Ext.param = NULL;
+            lz4Ext.obj = nullptr;
             cl::Buffer* buffer_lz4out = new cl::Buffer(*m_context, CL_MEM_WRITE_ONLY | CL_MEM_EXT_PTR_XILINX, outputSize, &(lz4Ext));
             buflz4OutVec.push_back(buffer_lz4out);
             uint8_t* h_buf_out_p2p = (uint8_t*)m_q->enqueueMapBuffer(*(buffer_lz4out), CL_TRUE, CL_MAP_READ, 0, outputSize);
@@ -255,6 +245,9 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         }
         else
         {
+            // Creating Host memory to read the compressed data back to host for non-p2p flow case
+            uint8_t* compressData = new uint8_t[outputSize];
+            compressDataInHostVec.push_back(compressData);
             cl::Buffer* buffer_lz4out = new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_WRITE_ONLY, outputSize, compressDataInHostVec[i]);
             buflz4OutVec.push_back(buffer_lz4out);
         }
@@ -299,16 +292,20 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
             h_blksize[bIdx++] = block_size;
         }
 
-        if (enable_p2p) {
-            int fd_p2p_c_out = open(outFileVec[i].c_str(), O_CREAT | O_WRONLY | O_DIRECT, 0777);
-            //int fd_p2p_c_out = open(outFileVec[i].c_str(), O_CREAT | O_WRONLY, 0777);
-            if (fd_p2p_c_out <= 0) {
-                std::cout << "P2P: Unable to open output file, exited!, ret: " << fd_p2p_c_out << std::endl;
-                close(fd_p2p_c_out);
-                exit(1);
-            }
-            fd_p2p_vec.push_back(fd_p2p_c_out);
+        int fd_p2p_c_out = 0;
+        if (enable_p2p) { 
+            fd_p2p_c_out = open(outFileVec[i].c_str(), O_CREAT | O_WRONLY | O_DIRECT, 0777);
         }
+        else
+        {
+            fd_p2p_c_out = open(outFileVec[i].c_str(), O_CREAT | O_WRONLY, 0777);
+        }
+        if (fd_p2p_c_out <= 0) {
+            std::cout << "P2P: Unable to open output file, exited!, ret: " << fd_p2p_c_out << std::endl;
+            close(fd_p2p_c_out);
+            exit(1);
+        }
+        fd_p2p_vec.push_back(fd_p2p_c_out);
 
         // Set kernel arguments
         cl::Kernel* compress_kernel_lz4 = new cl::Kernel(*m_program, comp_kname.c_str());
@@ -378,6 +375,7 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
     }
     //m_q->finish();
 
+    uint8_t empty_buffer[4096] = {0};
     uint64_t total_file_size = 0;
     uint64_t comp_file_size = 0;
     for (uint32_t i = 0; i < inVec.size(); i++) {
@@ -386,7 +384,6 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         uint32_t align_4k = compressed_size / RESIDUE_4K;
         uint32_t outIdx_align = RESIDUE_4K * align_4k;
         uint32_t residue_size = compressed_size - outIdx_align;
-        uint8_t empty_buffer[4096] = {0};
         // Counter which helps in tracking
         // Output buffer index
         
@@ -409,12 +406,6 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
 
         if (enable_p2p) {
             auto ssd_start = std::chrono::high_resolution_clock::now();
-#if 0
-            if(fallocate(fd_p2p_vec[i] , 0, 0, compressed_size)){
-                std::cout << "NVMe fallocate failed: error: " << std::strerror(errno)  << std::endl;
-                exit(EXIT_FAILURE);
-            }
-#endif       
             ret = write(fd_p2p_vec[i], bufp2pOutVec[i], compressed_size);
             if (ret == -1)
             {
@@ -428,28 +419,30 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
             close(fd_p2p_vec[i]);
         } else {
             m_q->enqueueReadBuffer(*(buflz4OutVec[i]), 0, 0, compressed_size, compressDataInHostVec[i]);
-        }
-        total_file_size += inSizeVec[i];
-    }
-    
-    if (!enable_p2p) {
-        m_q->finish();
-    }
-    
-    // Post Processing and cleanup
-    if (!enable_p2p) {
-        for (uint32_t i = 0; i < inVec.size(); i++) {
+            m_q->finish();
             auto ssd_start = std::chrono::high_resolution_clock::now();
+#if 1
+            ret = write(fd_p2p_vec[i], compressDataInHostVec[i], compressed_size);
+            if (ret == -1)
+            {
+                std::cout << i << " :: " << compressed_size << std::endl;
+                std::cout << "P2P: write() failed with error: " << ret << ", line: " << __LINE__ << std::endl;
+            }
+#else
             std::ofstream outFile(outFileVec[i].c_str(), std::ofstream::binary);
             outFile.write((char*)compressDataInHostVec[i], compressSizeVec[i]);
             outFile.close();
+#endif
             delete compressDataInHostVec[i];
             
             auto ssd_end = std::chrono::high_resolution_clock::now();
             auto ssd_time_ns = std::chrono::duration<double, std::nano>(ssd_end - ssd_start);
             total_ssd_time_ns += ssd_time_ns;
         }
+        total_file_size += inSizeVec[i];
     }
+    
+    // Post Processing and cleanup
     auto total_end = std::chrono::high_resolution_clock::now();
 
     std::cout << "########################### Test Result ############################################" << std::endl;
