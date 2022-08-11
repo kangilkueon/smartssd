@@ -183,6 +183,7 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
     uint64_t total_kernel_time = 0;
     uint64_t total_packer_kernel_time = 0;
     std::chrono::duration<double, std::nano> total_ssd_time_ns(0);
+    std::chrono::duration<double, std::nano> total_comp_time_ns(0);
 
     // Pre Processing
     for (uint32_t i = 0; i < inVec.size(); i++) {
@@ -239,46 +240,6 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
             pack_kname += ":{xilLz4Packer_2}";
         }
 
-#if 0
-        // read file from ssd
-        int datasize = inSizeVec[i];
-        // file open
-        int inputFD = open(inVec[i].c_str(), O_CREAT | O_RDONLY, 0777); // | O_DIRECT
-        std::cout << inVec[i].c_str() << std::endl;
-        if (inputFD < 0) 
-        {
-            std::cout << "[Error] Input file error!" << std::endl;
-            printf("Error : %s\n", strerror(errno));
-        }
-        // buffer
-        char *memory = static_cast<char *>(aligned_alloc(4096, datasize));
-        int read_result = read(inputFD, (void*) memory, datasize);
-        if (read_result < 0) 
-        {
-            std::cout << "[Error] file Read error!" << std::endl;
-            printf("Error : %s\n", strerror(errno));
-        }
-
-        inSizeVec[i] = read_result;
-        int outputFD = open("/mnt/smartssd/write_test.txt", O_CREAT | O_WRONLY, 0777);
-        if (outputFD < 0) std::cout << "outputFD file error!" << std::endl;
-        int w_result = write(outputFD, (void*) memory, read_result);
-        std::cout << "w_result result : " << w_result << std::endl;
-        close(outputFD);
-        close(inputFD);
-
-        std::cout << "1!" << std::endl;
-        cl_mem_ext_ptr_t outExt;
-        outExt = {XCL_MEM_EXT_P2P_BUFFER, nullptr, 0};
-        cl::Buffer* buffer_input_file = new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, datasize, memory);
-        if (buffer_input_file == nullptr) 
-            std::cout << "buffer error!" << std::endl;
-        std::cout << "2!" << std::endl;
-        //uint8_t* h_buf_in_p2p = (uint8_t*)m_q->enqueueMapBuffer(*(buffer_input_file), CL_TRUE, CL_MAP_WRITE | CL_MAP_READ, 0, datasize);
-        
-        bufInputVec.push_back(buffer_input_file);
-
-#endif
         // Device buffer allocation
         // K1 Input:- This buffer contains input chunk data
         cl::Buffer* buffer_input =new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY, inSizeVec[i], inVec[i]);
@@ -384,7 +345,9 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         
     }
     m_q->finish();
+    
     auto total_start = std::chrono::high_resolution_clock::now();
+    auto comp_start = std::chrono::high_resolution_clock::now();
     for (uint32_t i = 0; i < inVec.size(); i++) {
         /* Transfer data from host to device
         * In p2p case, no need to transfer buffer input to device from host.
@@ -413,6 +376,7 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         m_q->enqueueMigrateMemObjects({*(buflz4OutSizeVec[i])}, CL_MIGRATE_MEM_OBJECT_HOST, &packWait,
                                       opFinishEvent[i]);
     }
+    //m_q->finish();
 
     uint64_t total_file_size = 0;
     uint64_t comp_file_size = 0;
@@ -438,17 +402,19 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         compressed_size = outIdx_align + RESIDUE_4K;
         compressSizeVec.push_back(compressed_size);
 
-
         comp_file_size += compressed_size;
+        auto comp_end = std::chrono::high_resolution_clock::now();
+        auto comp_time_ns = std::chrono::duration<double, std::nano>(comp_end - comp_start);
+        total_comp_time_ns += comp_time_ns;
 
         if (enable_p2p) {
             auto ssd_start = std::chrono::high_resolution_clock::now();
-
+#if 0
             if(fallocate(fd_p2p_vec[i] , 0, 0, compressed_size)){
                 std::cout << "NVMe fallocate failed: error: " << std::strerror(errno)  << std::endl;
                 exit(EXIT_FAILURE);
             }
-            
+#endif       
             ret = write(fd_p2p_vec[i], bufp2pOutVec[i], compressed_size);
             if (ret == -1)
             {
@@ -458,15 +424,7 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
             auto ssd_end = std::chrono::high_resolution_clock::now();
             auto ssd_time_ns = std::chrono::duration<double, std::nano>(ssd_end - ssd_start);
             total_ssd_time_ns += ssd_time_ns;
-            float ssd_throughput_in_mbps_1 = (float)comp_file_size * 1000 / total_ssd_time_ns.count();
 
-            // Luka
-            // std::cout << "\n\n(float)comp_file_size  " << (float)comp_file_size << std::endl;
-            // std::cout << "total_ssd_time_ns.count() " << total_ssd_time_ns.count() << std::endl;
-
-
-            std::cout << "\nSSD Throughput: " << std::fixed << std::setprecision(2) << ssd_throughput_in_mbps_1;
-            std::cout << " MB/s";
             close(fd_p2p_vec[i]);
         } else {
             m_q->enqueueReadBuffer(*(buflz4OutVec[i]), 0, 0, compressed_size, compressDataInHostVec[i]);
@@ -477,16 +435,38 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
     if (!enable_p2p) {
         m_q->finish();
     }
-#if 0
-#endif
+    
     // Post Processing and cleanup
-    for (uint32_t i = 0; i < inVec.size(); i++) {
-        if (!enable_p2p) {
+    if (!enable_p2p) {
+        for (uint32_t i = 0; i < inVec.size(); i++) {
+            auto ssd_start = std::chrono::high_resolution_clock::now();
             std::ofstream outFile(outFileVec[i].c_str(), std::ofstream::binary);
             outFile.write((char*)compressDataInHostVec[i], compressSizeVec[i]);
             outFile.close();
             delete compressDataInHostVec[i];
+            
+            auto ssd_end = std::chrono::high_resolution_clock::now();
+            auto ssd_time_ns = std::chrono::duration<double, std::nano>(ssd_end - ssd_start);
+            total_ssd_time_ns += ssd_time_ns;
         }
+    }
+    auto total_end = std::chrono::high_resolution_clock::now();
+
+    std::cout << "########################### Test Result ############################################" << std::endl;
+    float ssd_throughput_in_mbps_1 = (float)comp_file_size * 1000 / total_ssd_time_ns.count();
+    std::cout << "\nSSD Throughput: " << std::fixed << std::setprecision(2) << ssd_throughput_in_mbps_1;
+    std::cout << " MB/s";
+
+    auto time_ns = std::chrono::duration<double, std::nano>(total_end - total_start);
+    float throughput_in_mbps_1 = (float)total_file_size * 1000 / time_ns.count();
+
+    std::cout << "\nOverall Throughput [Including SSD Operation]: " << std::fixed << std::setprecision(2)
+              << throughput_in_mbps_1;
+    std::cout << " MB/s";
+
+    std::cout << "\nComp time: " << total_comp_time_ns.count() / 1000 / 1000 << "ms" << std::endl;
+    std::cout << "####################################################################################" << std::endl;
+    for (uint32_t i = 0; i < inVec.size(); i++) {
         delete (bufInputVec[i]);
         delete (bufOutputVec[i]);
         delete (buflz4OutVec[i]);
@@ -496,12 +476,4 @@ void xflz4::compress_in_line_multiple_files(std::vector<char*>& inVec,
         delete (compressKernelVec[i]);
         delete (packerKernelVec[i]);
     }
-    auto total_end = std::chrono::high_resolution_clock::now();
-
-    auto time_ns = std::chrono::duration<double, std::nano>(total_end - total_start);
-    float throughput_in_mbps_1 = (float)total_file_size * 1000 / time_ns.count();
-
-    std::cout << "\nOverall Throughput [Including SSD Operation]: " << std::fixed << std::setprecision(2)
-              << throughput_in_mbps_1;
-    std::cout << " MB/s";
 }

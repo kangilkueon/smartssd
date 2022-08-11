@@ -36,6 +36,9 @@ void compress_multiple_files(const std::vector<std::string>& inFileVec,
     std::cout << "\n\nNumFiles:" << inFileVec.size() << std::endl;
 
     std::cout << "\x1B[31m[Disk Operation]\033[0m Reading Input Files Started ..." << std::endl;
+    uint32_t total_file_size = 0;
+
+    auto ssd_start = std::chrono::high_resolution_clock::now();
     for (uint32_t fid = 0; fid < inFileVec.size(); fid++) {
         std::string inFile_name = inFileVec[fid];
         std::ifstream inFile(inFile_name.c_str(), std::ifstream::binary);
@@ -51,7 +54,13 @@ void compress_multiple_files(const std::vector<std::string>& inFileVec,
         inFile.read(in, input_size);
         inVec.push_back(in);
         inSizeVec.push_back(input_size);
+        total_file_size += input_size;
     }
+    auto ssd_end = std::chrono::high_resolution_clock::now();
+    auto ssd_time_ns = std::chrono::duration<double, std::nano>(ssd_end - ssd_start);
+    float ssd_throughput_in_mbps_1 = (float)total_file_size * 1000 / ssd_time_ns.count();
+    std::cout << "SSD Throughput: " << std::fixed << std::setprecision(2) << ssd_throughput_in_mbps_1;
+    std::cout << " MB/s" << std::endl;
     std::cout << "\x1B[31m[Disk Operation]\033[0m Reading Input Files Done ..." << std::endl;
     std::cout << "\n\n";
     std::cout << "\x1B[32m[OpenCL Setup]\033[0m OpenCL/Host/Device Buffer Setup Started ..." << std::endl;
@@ -245,6 +254,7 @@ int main(int argc, char *argv[]) {
     g_options.enable_p2p = vm["enable_p2p"].as<bool>();
 
     size_t fileSize = getFileSize(g_options.input_filename);
+    std::cout << "[DEBUG] input file : " << g_options.input_filename << std::endl;
     std::cout << "[DEBUG] input file size : " << fileSize << std::endl;
 
     if (g_options.compress == true)
