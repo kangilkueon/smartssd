@@ -71,7 +71,7 @@ int validate(std::string& inFile_name, std::string& outFile_name);
 
 class xflz4 {
    public:
-    void compress_in_line_multiple_files(std::vector<char*>& inVec,
+    void compress_in_line_multiple_files(std::vector<int>& fd_p2p_in_vec,
                                          const std::vector<std::string>& outFileVec,
                                          std::vector<uint32_t>& inSizeVec,
                                          bool enable_p2p);
