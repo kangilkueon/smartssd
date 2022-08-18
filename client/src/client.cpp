@@ -56,15 +56,7 @@ void compress_multiple_files(const std::vector<std::string>& inFileVec,
         inSizeVec.push_back(input_size_4k_multiple);
         total_file_size += input_size;
 
-        int fd_p2p_c_in = -1;
-        if (enable_p2p)
-        {
-            fd_p2p_c_in = open(inFile_name.c_str(), O_RDONLY | O_DIRECT);
-        }
-        else
-        {
-            fd_p2p_c_in = open(inFile_name.c_str(), O_RDONLY);
-        }
+        int fd_p2p_c_in = open(inFile_name.c_str(), O_RDONLY | O_DIRECT);
         if (fd_p2p_c_in <= 0) {
             std::cout << "P2P: Unable to open input file, fd: " << fd_p2p_c_in << std::endl;
             exit(1);
