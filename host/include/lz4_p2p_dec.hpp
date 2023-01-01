@@ -40,6 +40,37 @@
 // Maximum number of blocks based on host buffer size
 #define MAX_NUMBER_BLOCKS (HOST_BUFFER_SIZE / (BLOCK_SIZE_IN_KB * 1024))
 
+
+class Decompress : public SmartSSD {
+    public:
+    Decompress(const std::string& binaryFile, uint8_t device_id, bool p2p_enable);
+    ~Decompress();
+
+    void MakeOutputFileList(const std::vector<std::string>& inputFile);
+    
+
+    virtual void preProcess();
+    virtual void run();
+    virtual void postProcess();
+private:
+    std::vector<uint32_t> oriFileSizeVec;
+
+    std::vector<std::string> outFileList;
+    std::vector<std::string> orgFileList;
+
+    std::vector<cl::Buffer*> bufChunkInfoVec;
+    std::vector<cl::Buffer*> bufBlockInfoVec;
+    
+    std::vector<cl::Event*> opFinishEvent;
+
+    std::vector<cl::Kernel*> unpackerKernelVec;
+    std::vector<cl::Kernel*> decompressKernelVec;
+    // Kernel names
+    std::vector<std::string> unpacker_kernel_names = {"xilLz4Unpacker"};
+    std::vector<std::string> decompress_kernel_names = {"xilLz4P2PDecompress"};
+    
+    std::chrono::duration<double, std::nano> m_compression_time;
+};
 class xfLz4 {
    public:
     xfLz4(const std::string& binaryFile);

@@ -133,8 +133,6 @@ void SmartSSD::OpenOutputFiles()
         outputFDVec.push_back(fd_p2p_c_out);
     }
     std::cout << "\x1B[31m[Disk Operation]\033[0m Reading Output Files Done ..." << std::endl;
-
-    outputFileSizeVec = inputFileSizeVec;
 }
 
 void SmartSSD::CloseInputFiles()
@@ -211,6 +209,8 @@ void SmartSSD::initBuffer()
             cl::Buffer* buffer_output = new cl::Buffer(*m_context, CL_MEM_USE_HOST_PTR | CL_MEM_WRITE_ONLY, outputFileSizeVec[i], resultData);
             bufOutputVec.push_back(buffer_output);
         }
+
+        printf("output size : %d\n",outputFileSizeVec[i]);
     }
 }
 

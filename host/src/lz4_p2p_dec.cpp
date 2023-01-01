@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SmartSSD.hpp"
 #include <iostream>
 #include <cassert>
 #include <vector>
@@ -29,6 +30,162 @@ using std::streamsize;
 int fd_p2p_c_out = 0;
 int fd_p2p_c_in = 0;
 
+
+Decompress::Decompress(const std::string& binaryFile, uint8_t device_id, bool p2p_enable)
+    : SmartSSD(binaryFile, device_id, p2p_enable)
+{
+    m_compression_time = std::chrono::milliseconds::zero();
+}
+
+Decompress::~Decompress()
+{
+    std::cout << "\x1B[32m[FPGA Operation]\033[0m Compression Time : " << std::fixed << std::setprecision(2) << m_compression_time.count() << " ns" << std::endl;
+    for (uint32_t i = 0; i < inputFDVec.size(); i++) {
+        delete (bufChunkInfoVec[i]);
+        delete (bufBlockInfoVec[i]);
+
+        delete (unpackerKernelVec[i]);
+        delete (decompressKernelVec[i]);
+    }
+}
+
+void Decompress::MakeOutputFileList(const std::vector<std::string>& inputFile)
+{
+    for (std::string inFile : inputFile)
+    {
+        std::string out_file = inFile + ".org";
+        std::string delimiter = ".lz4";
+        std::string token = inFile.substr(0, inFile.find(delimiter));
+        orgFileList.push_back(token);
+        outputFileVec.push_back(out_file);
+
+        std::ifstream oriFile(token.c_str(), std::ifstream::binary);
+        if (!oriFile) {
+            std::cout << "Unable to open file";
+            exit(1);
+        }
+        uint32_t input_size = SmartSSD::get_file_size(oriFile);
+        oriFile.close();
+
+        uint64_t input_size_4k_multiple = ((input_size - 1) / (4096) + 1) * 4096;
+        oriFileSizeVec.push_back(input_size_4k_multiple);
+        printf("%d\n", input_size_4k_multiple);
+    }
+
+    outputFileSizeVec = oriFileSizeVec;
+}
+
+void Decompress::preProcess()
+{
+    std::cout << "preprocess\n";
+
+    cl_mem_ext_ptr_t hostBoExt = {0};
+    cl_mem_ext_ptr_t hostOutBoExt = {0};
+    for (uint32_t fid = 0; fid < inputFDVec.size(); fid++) {
+        uint64_t original_size = 0;
+        uint32_t block_size_in_bytes = BLOCK_SIZE_IN_KB * 1024;
+        uint32_t m_BlockSizeInKb = BLOCK_SIZE_IN_KB;
+        original_size = oriFileSizeVec[fid];
+
+        uint32_t num_blocks = (original_size - 1) / block_size_in_bytes + 1;
+        uint8_t total_no_cu = 1;
+        uint8_t first_chunk = 1;
+        std::string up_kname = unpacker_kernel_names[0];
+        std::string dec_kname = decompress_kernel_names[0];
+
+        int cu_num = 0; //i % 2;
+
+        if (cu_num == 0) {
+            up_kname += ":{xilLz4Unpacker_1}";
+            dec_kname += ":{xilLz4P2PDecompress_1}";
+        } else {
+            up_kname += ":{xilLz4Unpacker_2}";
+            dec_kname += ":{xilLz4P2PDecompress_2}";
+        }
+
+        assert(sizeof(dt_blockInfo) == (GMEM_DATAWIDTH / 8));
+        cl::Buffer* buffer_chunk_info = new cl::Buffer(*m_context, CL_MEM_EXT_PTR_XILINX | CL_MEM_WRITE_ONLY, sizeof(dt_chunkInfo), &hostBoExt);
+        cl::Buffer* buffer_block_info = new cl::Buffer(*m_context, CL_MEM_EXT_PTR_XILINX | CL_MEM_WRITE_ONLY, sizeof(dt_blockInfo) * num_blocks, &hostBoExt);
+
+        bufChunkInfoVec.push_back(buffer_chunk_info);
+        bufBlockInfoVec.push_back(buffer_block_info);
+
+        cl::Kernel* unpacker_kernel_lz4 = new cl::Kernel(*m_program, up_kname.c_str());
+        uint32_t narg = 0;
+        unpacker_kernel_lz4->setArg(narg++, *(bufInputVec[fid]));
+        unpacker_kernel_lz4->setArg(narg++, *(bufBlockInfoVec[fid]));
+        unpacker_kernel_lz4->setArg(narg++, *(bufChunkInfoVec[fid]));
+        unpacker_kernel_lz4->setArg(narg++, m_BlockSizeInKb);
+        unpacker_kernel_lz4->setArg(narg++, first_chunk);
+        unpacker_kernel_lz4->setArg(narg++, total_no_cu);
+        unpacker_kernel_lz4->setArg(narg++, num_blocks);
+        unpackerKernelVec.push_back(unpacker_kernel_lz4);
+
+        narg = 0;
+        uint32_t tmp = 0;
+
+        cl::Kernel* decompress_kernel_lz4 = new cl::Kernel(*m_program, dec_kname.c_str());
+        decompress_kernel_lz4->setArg(narg++, *(bufInputVec[fid]));
+        decompress_kernel_lz4->setArg(narg++, *(bufOutputVec[fid]));
+        decompress_kernel_lz4->setArg(narg++, *(bufBlockInfoVec[fid]));
+        decompress_kernel_lz4->setArg(narg++, *(bufChunkInfoVec[fid]));
+        decompress_kernel_lz4->setArg(narg++, m_BlockSizeInKb);
+        decompress_kernel_lz4->setArg(narg++, tmp);
+        decompress_kernel_lz4->setArg(narg++, total_no_cu);
+        decompress_kernel_lz4->setArg(narg++, num_blocks);
+        decompressKernelVec.push_back(decompress_kernel_lz4);
+
+        printf("PARAMETER : %d\n", num_blocks);
+        cl::Event* event = new cl::Event();
+        opFinishEvent.push_back(event);
+    }
+    m_q->finish();
+}
+void Decompress::run()
+{
+    std::cout << "run\n";
+
+    auto total_start = std::chrono::high_resolution_clock::now();
+    for (uint32_t fid = 0; fid < inputFDVec.size(); fid++) {
+        cl::Event write_event;
+        if (!m_p2p_enable) 
+        {
+            m_q->enqueueMigrateMemObjects({*(bufInputVec[fid])}, 0 /* 0 means from host*/, NULL, &write_event);
+        }
+        // m_q->enqueueMigrateMemObjects({*(bufChunkInfoVec[fid])}, 0 /* 0 means from host*/, NULL, NULL);
+
+        write_event.wait();
+    std::cout << "run0\n";
+        std::vector<cl::Event> e_upWait;
+        std::vector<cl::Event> e_decWait;
+        cl::Event e_up;
+        cl::Event e_dec;
+
+        m_q->enqueueTask(*unpackerKernelVec[fid], NULL, &e_up);
+        e_upWait.push_back(e_up);
+        e_upWait[fid].wait();
+    std::cout << "run1\n";
+        m_q->enqueueTask(*decompressKernelVec[fid], &e_upWait, opFinishEvent[fid]);
+        opFinishEvent[fid]->wait();
+    std::cout << "run2\n";
+        //m_q->enqueueMigrateMemObjects({*(bufOutputVec[fid])}, CL_MIGRATE_MEM_OBJECT_HOST, &e_decWait, opFinishEvent[fid]);
+    std::cout << "run3\n";
+    }
+
+    std::cout << "run\n";
+    for (uint32_t i = 0; i < inputFDVec.size(); i++) {
+        opFinishEvent[i]->wait();
+        if (m_p2p_enable == false) {
+            //m_q->enqueueReadBuffer(*(bufOutputVec[i]), 0, 0, compressed_size, resultDataInHostVec[i]);
+        }
+    }
+    std::cout << "3!" << std::endl;
+}
+
+     void Decompress::postProcess()
+     {
+        std::cout << "postProcess\n";
+     }
 std::vector<unsigned char> readBinary(const std::string& fileName) {
     ifstream file(fileName, ios::binary | ios::ate);
     if (file) {

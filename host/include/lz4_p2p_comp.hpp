@@ -75,7 +75,8 @@ class Compress : public SmartSSD {
     ~Compress();
 
     void MakeOutputFileList(const std::vector<std::string>& inputFile);
-
+    void SetOutputFileSize();
+    
     virtual void preProcess();
     virtual void run();
     virtual void postProcess();

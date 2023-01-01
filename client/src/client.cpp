@@ -215,24 +215,39 @@ int main(int argc, char *argv[]) {
     
     if (g_options.compress == true)
     {
-        Compress compressModul(g_options.xclbin, 0, g_options.enable_p2p, BLOCK_SIZE_IN_KB);
-        compressModul.SetInputFileList(g_options.inputFileList);
-        compressModul.MakeOutputFileList(g_options.inputFileList);
-        compressModul.OpenInputFiles();
-        compressModul.OpenOutputFiles();
+        Compress compressModule(g_options.xclbin, 0, g_options.enable_p2p, BLOCK_SIZE_IN_KB);
+        compressModule.SetInputFileList(g_options.inputFileList);
+        compressModule.MakeOutputFileList(g_options.inputFileList);
+        compressModule.OpenInputFiles();
+        compressModule.OpenOutputFiles();
+        compressModule.SetOutputFileSize();
 
-        compressModul.initBuffer();
-        compressModul.readFile();
-        compressModul.preProcess();
-        compressModul.run();
-        compressModul.postProcess();
-        compressModul.writeFile();
-        compressModul.CloseInputFiles();
-        compressModul.CloseOutputFiles();
+        compressModule.initBuffer();
+        compressModule.readFile();
+        compressModule.preProcess();
+        compressModule.run();
+        compressModule.postProcess();
+        compressModule.writeFile();
+        compressModule.CloseInputFiles();
+        compressModule.CloseOutputFiles();
     }
     else
     {
-        xil_decompress_file(g_options.inputFileList, g_options.xclbin, g_options.enable_p2p, 58);
+        Decompress decompressModule(g_options.xclbin, 0, g_options.enable_p2p);
+        decompressModule.SetInputFileList(g_options.inputFileList);
+        decompressModule.MakeOutputFileList(g_options.inputFileList);
+        decompressModule.OpenInputFiles();
+        decompressModule.OpenOutputFiles();
+
+        decompressModule.initBuffer();
+        decompressModule.readFile();
+        decompressModule.preProcess();
+        decompressModule.run();
+        decompressModule.postProcess();
+        decompressModule.writeFile();
+        decompressModule.CloseInputFiles();
+        decompressModule.CloseOutputFiles();
+        //xil_decompress_file(g_options.inputFileList, g_options.xclbin, g_options.enable_p2p, 58);
     }
     return 0;
 }

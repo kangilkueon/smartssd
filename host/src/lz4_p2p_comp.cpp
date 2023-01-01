@@ -38,7 +38,7 @@ Compress::Compress(const std::string& binaryFile, uint8_t device_id, bool p2p_en
 
 Compress::~Compress()
 {
-    std::cout << "\x1B[32m[FPGA Operation]\033[0m Compression Time : " << m_compression_time.count() << " ns" << std::endl;
+    std::cout << "\x1B[32m[FPGA Operation]\033[0m Compression Time : " << std::fixed << std::setprecision(2) << m_compression_time.count() << " ns" << std::endl;
     for (uint32_t i = 0; i < inputFDVec.size(); i++) {
         delete (h_headerVec[i]);
         delete (h_blkSizeVec[i]);
@@ -65,6 +65,12 @@ void Compress::MakeOutputFileList(const std::vector<std::string>& inputFile)
         outputFileVec.push_back(out_file);
     }
 }
+
+void Compress::SetOutputFileSize()
+{
+    outputFileSizeVec = inputFileSizeVec;
+}
+
 void Compress::preProcess()
 {
     if (inputFileSizeVec.size() <= 0)
@@ -187,6 +193,7 @@ void Compress::preProcess()
     }
     m_q->finish();
 }
+
 void Compress::run()
 {
     auto comp_start = std::chrono::high_resolution_clock::now();
