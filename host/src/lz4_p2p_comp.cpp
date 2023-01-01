@@ -231,9 +231,6 @@ void xflz4::compress_in_line_multiple_files(std::vector<int>& fd_p2p_in_vec,
         }
         // Device buffer allocation
         // K1 Input:- This buffer contains input chunk data
-
-
-
         if (enable_p2p == true)
         {
             // DDR buffer extensions
@@ -473,26 +470,24 @@ void xflz4::compress_in_line_multiple_files(std::vector<int>& fd_p2p_in_vec,
 
             close(fd_p2p_out_vec[i]);
         } else {
-#if 1
             ret = write(fd_p2p_out_vec[i], compressDataInHostVec[i], compressed_size);
             if (ret == -1)
             {
                 std::cout << i << " :: " << compressed_size << std::endl;
                 std::cout << "P2P: write() failed with error: " << ret << ", line: " << __LINE__ << std::endl;
             }
-#else
-            std::ofstream outFile(outFileVec[i].c_str(), std::ofstream::binary);
-            outFile.write((char*)compressDataInHostVec[i], compressSizeVec[i]);
-            outFile.close();
-#endif
             close(fd_p2p_out_vec[i]);
-            delete originalDataInHostVec[i];
-            delete compressDataInHostVec[i];
         }
         auto ssd_end = std::chrono::high_resolution_clock::now();
         auto ssd_time_ns = std::chrono::duration<double, std::nano>(ssd_end - ssd_start);
         total_ssd_write_time_ns += ssd_time_ns;
         total_file_size += inSizeVec[i];
+
+        
+        if (!enable_p2p) {
+            delete originalDataInHostVec[i];
+            delete compressDataInHostVec[i];
+        }
     }
     
     // Post Processing and cleanup
@@ -501,23 +496,23 @@ void xflz4::compress_in_line_multiple_files(std::vector<int>& fd_p2p_in_vec,
     std::cout << "########################### Test Result ############################################" << std::endl;
     float ssd_throughput_in_mbps_read = (float)total_file_size * 1000 / total_ssd_read_time_ns.count();
     std::cout << "\nSSD Read Throughput: " << std::fixed << std::setprecision(2) << ssd_throughput_in_mbps_read;
-    std::cout << " MB/s";
+    std::cout << " MB/s (" << total_ssd_read_time_ns.count() << " ns)";
 
     float ssd_throughput_in_mbps_write = (float)comp_file_size * 1000 / total_ssd_write_time_ns.count();
     std::cout << "\nSSD Write Throughput: " << std::fixed << std::setprecision(2) << ssd_throughput_in_mbps_write;
-    std::cout << " MB/s";
+    std::cout << " MB/s (" << total_ssd_write_time_ns.count() << " ns)";
 
     float throughput_comp_only = (float)total_file_size * 1000 / total_comp_time_ns.count();
     std::cout << "\nComp bandwidth: " << std::fixed << std::setprecision(2)
               << throughput_comp_only;
-    std::cout << " MB/s";
+    std::cout << " MB/s (" << total_comp_time_ns.count() << " ns)";
 
     auto time_ns = std::chrono::duration<double, std::nano>(total_end - total_start);
     float throughput_in_mbps_1 = (float)total_file_size * 1000 / time_ns.count();
 
     std::cout << "\nOverall Throughput [Including SSD Operation]: " << std::fixed << std::setprecision(2)
               << throughput_in_mbps_1;
-    std::cout << " MB/s";
+    std::cout << " MB/s (" << time_ns.count() << " ns)";
     std::cout << "\n####################################################################################" << std::endl;
     for (uint32_t i = 0; i < fd_p2p_in_vec.size(); i++) {
         delete (bufInputVec[i]);
