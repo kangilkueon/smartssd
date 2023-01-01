@@ -1,6 +1,7 @@
 #include <defns.h>
 
 #include <boost/program_options.hpp>
+#include <SmartSSD.hpp>
 #include <lz4_p2p_comp.hpp>
 #include <lz4_p2p_dec.hpp>
 #include <vector>
@@ -17,6 +18,7 @@ struct Options {
   bool multiple;
 } g_options{};
 
+#if 0
 void compress_multiple_files(const std::vector<std::string>& inFileVec,
                              const std::vector<std::string>& outFileVec,
                              uint32_t block_size,
@@ -70,12 +72,6 @@ void compress_multiple_files(const std::vector<std::string>& inFileVec,
     std::cout << "\x1B[36m[FPGA LZ4]\033[0m LZ4 P2P Compression Done ..." << std::endl;
 }
 
-int validateFile(std::string& inFile_name, std::string& origFile_name) {
-    std::string command = "cmp " + inFile_name + " " + origFile_name;
-    int ret = system(command.c_str());
-    return ret;
-}
-
 void xil_compress_file(std::vector<std::string> inFileList, uint32_t block_size, std::string& compress_bin, bool enable_p2p) {
     std::vector<std::string> outFileList;
 
@@ -89,6 +85,14 @@ void xil_compress_file(std::vector<std::string> inFileList, uint32_t block_size,
     std::cout << "\nCompression is successful. No errors found.\n";
     std::cout << std::endl;
 }
+#endif
+
+int validateFile(std::string& inFile_name, std::string& origFile_name) {
+    std::string command = "cmp " + inFile_name + " " + origFile_name;
+    int ret = system(command.c_str());
+    return ret;
+}
+
 void decompress_multiple_files(const std::vector<std::string>& inFileVec,
                                const std::vector<std::string>& outFileVec,
                                const std::string& decompress_bin,
@@ -153,7 +157,6 @@ void decompress_multiple_files(const std::vector<std::string>& inFileVec,
     }
     std::cout << "\x1B[31m[Disk Operation]\033[0m Writing Output Files Done ..." << std::endl;
 }
-
 void xil_decompress_file(std::vector<std::string> inFileList, std::string& decompress_bin, bool enable_p2p, uint8_t maxCR) {
     std::vector<std::string> outFileList;
     std::vector<std::string> orgFileList;
@@ -209,10 +212,23 @@ int main(int argc, char *argv[]) {
     g_options.xclbin = vm["xclbin"].as<string>();
     g_options.compress = vm["compress"].as<bool>();
     g_options.enable_p2p = vm["enable_p2p"].as<bool>();
-
+    
     if (g_options.compress == true)
     {
-        xil_compress_file(g_options.inputFileList, BLOCK_SIZE_IN_KB, g_options.xclbin, g_options.enable_p2p);
+        Compress compressModul(g_options.xclbin, 0, g_options.enable_p2p, BLOCK_SIZE_IN_KB);
+        compressModul.SetInputFileList(g_options.inputFileList);
+        compressModul.MakeOutputFileList(g_options.inputFileList);
+        compressModul.OpenInputFiles();
+        compressModul.OpenOutputFiles();
+
+        compressModul.initBuffer();
+        compressModul.readFile();
+        compressModul.preProcess();
+        compressModul.run();
+        compressModul.postProcess();
+        compressModul.writeFile();
+        compressModul.CloseInputFiles();
+        compressModul.CloseOutputFiles();
     }
     else
     {

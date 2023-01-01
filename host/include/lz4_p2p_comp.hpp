@@ -69,6 +69,44 @@
 
 int validate(std::string& inFile_name, std::string& outFile_name);
 
+class Compress : public SmartSSD {
+    public:
+    Compress(const std::string& binaryFile, uint8_t device_id, bool p2p_enable, uint32_t block_kb);
+    ~Compress();
+
+    void MakeOutputFileList(const std::vector<std::string>& inputFile);
+
+    virtual void preProcess();
+    virtual void run();
+    virtual void postProcess();
+private:
+    size_t create_header(uint8_t* h_header, uint32_t inSize);
+    
+    // Block Size
+    uint32_t m_BlockSizeInKb;
+
+    std::vector<uint32_t> headerSizeVec;
+    std::vector<uint8_t*> h_headerVec;
+    std::vector<uint32_t*> h_blkSizeVec;
+    std::vector<uint32_t*> h_lz4OutSizeVec;
+
+    std::vector<cl::Buffer*> bufTmpOutputVec;
+    std::vector<cl::Buffer*> buflz4OutSizeVec;
+    std::vector<cl::Buffer*> bufCompSizeVec;
+    std::vector<cl::Buffer*> bufblockSizeVec;
+    std::vector<cl::Buffer*> bufheadVec;
+    
+    std::vector<cl::Event*> opFinishEvent;
+    
+    std::vector<cl::Kernel*> packerKernelVec;
+    std::vector<cl::Kernel*> compressKernelVec;
+    // Kernel names
+    std::vector<std::string> compress_kernel_names = {"xilLz4Compress"};
+    std::vector<std::string> packer_kernel_names = {"xilLz4Packer"};
+    
+    std::chrono::duration<double, std::nano> m_compression_time;
+};
+#if 0
 class xflz4 {
    public:
     void compress_in_line_multiple_files(std::vector<int>& fd_p2p_in_vec,
@@ -99,4 +137,5 @@ class xflz4 {
 
     std::vector<std::string> packer_kernel_names = {"xilLz4Packer"};
 };
+#endif
 #endif // _XFCOMPRESSION_LZ4_P2P_COMP_HPP_
