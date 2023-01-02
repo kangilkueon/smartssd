@@ -60,8 +60,6 @@ private:
 
     std::vector<cl::Buffer*> bufChunkInfoVec;
     std::vector<cl::Buffer*> bufBlockInfoVec;
-    
-    std::vector<cl::Event*> opFinishEvent;
 
     std::vector<cl::Kernel*> unpackerKernelVec;
     std::vector<cl::Kernel*> decompressKernelVec;
@@ -71,32 +69,4 @@ private:
     
     std::chrono::duration<double, std::nano> m_compression_time;
 };
-class xfLz4 {
-   public:
-    xfLz4(const std::string& binaryFile);
-    void decompress_in_line_multiple_files(const std::vector<std::string>& inFileList,
-                                           std::vector<int>&               fd_p2p_vec,
-                                           std::vector<char*>&             outVec,
-                                           std::vector<uint64_t>&          orgSizeVec,
-                                           std::vector<uint64_t>&          inSizeVec4k,
-                                           bool                            enable_p2p);
-    ~xfLz4();
-    static uint64_t get_file_size(std::ifstream& file) {
-        file.seekg(0, file.end);
-        uint64_t file_size = file.tellg();
-        file.seekg(0, file.beg);
-        return file_size;
-    }
-
-   private:
-    cl_program m_program;
-    cl_context m_context;
-    cl_device_id m_device;
-    cl_command_queue ooo_q;
-
-    std::vector<std::string> unpacker_kernel_names = {"xilLz4Unpacker"};
-
-    std::vector<std::string> decompress_kernel_names = {"xilLz4P2PDecompress"};
-};
-
 #endif  // _XFCOMPRESSION_LZ4_P2P_DEC_HPP_

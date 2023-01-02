@@ -97,8 +97,6 @@ private:
     std::vector<cl::Buffer*> bufblockSizeVec;
     std::vector<cl::Buffer*> bufheadVec;
     
-    std::vector<cl::Event*> opFinishEvent;
-    
     std::vector<cl::Kernel*> packerKernelVec;
     std::vector<cl::Kernel*> compressKernelVec;
     // Kernel names
@@ -107,36 +105,4 @@ private:
     
     std::chrono::duration<double, std::nano> m_compression_time;
 };
-#if 0
-class xflz4 {
-   public:
-    void compress_in_line_multiple_files(std::vector<int>& fd_p2p_in_vec,
-                                         const std::vector<std::string>& outFileVec,
-                                         std::vector<uint32_t>& inSizeVec,
-                                         bool enable_p2p);
-    static uint32_t get_file_size(std::ifstream& file) {
-        file.seekg(0, file.end);
-        uint32_t file_size = file.tellg();
-        file.seekg(0, file.beg);
-        return file_size;
-    }
-
-    xflz4(const std::string& binaryFile, uint8_t device_id, uint32_t m_block_kb);
-    ~xflz4();
-
-   private:
-    // Block Size
-    uint32_t m_BlockSizeInKb;
-    cl::Program* m_program;
-    cl::Context* m_context;
-    cl::CommandQueue* m_q;
-    uint64_t get_event_duration_ns(const cl::Event& event);
-    size_t create_header(uint8_t* h_header, uint32_t inSize);
-
-    // Kernel names
-    std::vector<std::string> compress_kernel_names = {"xilLz4Compress"};
-
-    std::vector<std::string> packer_kernel_names = {"xilLz4Packer"};
-};
-#endif
 #endif // _XFCOMPRESSION_LZ4_P2P_COMP_HPP_
