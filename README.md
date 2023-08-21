@@ -6,5 +6,14 @@ Example for Samsung smart ssd
 
 # how to build
 Build step
+```bash
 1. `./cmake .`
-2. `make`
+2. `make all`
+```
+# Precondition
+File system format, generate sample data
+```bash
+mkfs.ext4 /dev/nvme0n1
+mount /dev/nvme0n1 /mnt/smartssd
+cp test.txt /mnt/smartssd
+```
